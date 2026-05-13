@@ -1,6 +1,4 @@
-# Tag App
-
-Daily social chain game: mobile client (Expo) + API (Express + Prisma) + PostgreSQL + Redis.
+Monorepo for **Tag App** (daily chain contest). Public repo: [github.com/KuldeepSoni17/tag-app](https://github.com/KuldeepSoni17/tag-app).
 
 ## Layout
 
