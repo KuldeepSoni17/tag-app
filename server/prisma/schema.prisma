@@ -1,0 +1,156 @@
+// Tag App — PostgreSQL schema (Prisma)
+// Chains are directed lists: head → … → tail; one user per contest per approved membership.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContestStatus {
+  OPEN
+  CLOSED
+}
+
+model User {
+  id               String    @id @default(uuid())
+  phoneHash        String    @unique @map("phone_hash")
+  username         String    @unique
+  avatarUrl        String?   @map("avatar_url")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  isBanned         Boolean   @default(false) @map("is_banned")
+  bannedUntil      DateTime? @map("banned_until")
+  lastIp           String?   @map("last_ip")
+  registrationIp   String?   @map("registration_ip")
+
+  profileAnswers UserProfileAnswer[]
+  chainNodes     ChainNode[]
+  headChains     Chain[]         @relation("ChainHead")
+  tailChains     Chain[]         @relation("ChainTail")
+  wonContests    Contest[]       @relation("ContestWinner")
+  otpSessions    OtpSession[]
+  prizePayouts   PrizePayout[]
+
+  @@map("users")
+}
+
+/// Encrypted payload per question (server-side only; never send raw to client).
+model UserProfileAnswer {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  questionId        Int      @map("question_id")
+  ciphertext        String   @map("ciphertext")
+  iv                String   @map("iv")
+  authTag           String   @map("auth_tag")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, questionId])
+  @@map("user_profile_answers")
+}
+
+model Contest {
+  id                 String        @id @default(uuid())
+  date               DateTime      @db.Date
+  status             ContestStatus @default(OPEN)
+  criteriaEncrypted  String?       @map("criteria_encrypted")
+  criteriaIv         String?       @map("criteria_iv")
+  criteriaAuthTag    String?       @map("criteria_auth_tag")
+  criteriaRevealed   String?       @map("criteria_revealed")
+  winnerId           String?       @map("winner_id")
+  prizeAmount        Decimal       @default(0) @map("prize_amount") @db.Decimal(12, 2)
+
+  winner  User?         @relation("ContestWinner", fields: [winnerId], references: [id])
+  chains  Chain[]
+  payouts PrizePayout[]
+
+  @@unique([date])
+  @@map("contests")
+}
+
+model Chain {
+  id          String   @id @default(uuid())
+  contestId   String   @map("contest_id")
+  headUserId  String   @map("head_user_id")
+  tailUserId  String   @map("tail_user_id")
+  length      Int      @default(1)
+  isEligible  Boolean  @default(true) @map("is_eligible")
+  fraudFlag   Boolean  @default(false) @map("fraud_flag")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  contest Contest     @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  head    User        @relation("ChainHead", fields: [headUserId], references: [id])
+  tail    User        @relation("ChainTail", fields: [tailUserId], references: [id])
+  nodes   ChainNode[]
+  flags   FraudFlag[]
+
+  @@index([contestId])
+  @@map("chains")
+}
+
+model ChainNode {
+  id              String    @id @default(uuid())
+  chainId         String    @map("chain_id")
+  userId          String    @map("user_id")
+  taggedByUserId  String?   @map("tagged_by_user_id")
+  approvedAt      DateTime? @map("approved_at")
+  approvedIp      String?   @map("approved_ip")
+  position        Int
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  chain    Chain @relation(fields: [chainId], references: [id], onDelete: Cascade)
+  user     User  @relation(fields: [userId], references: [id])
+
+  @@unique([chainId, userId])
+  @@unique([chainId, position])
+  @@index([userId])
+  @@map("chain_nodes")
+}
+
+model FraudFlag {
+  id        String   @id @default(uuid())
+  chainId   String   @map("chain_id")
+  reason    String
+  reviewed  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  chain Chain @relation(fields: [chainId], references: [id], onDelete: Cascade)
+
+  @@index([chainId, reviewed])
+  @@map("fraud_flags")
+}
+
+model OtpSession {
+  id         String   @id @default(uuid())
+  phoneHash  String   @map("phone_hash")
+  codeHash   String   @map("code_hash")
+  expiresAt  DateTime @map("expires_at")
+  attempts   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  userId     String?  @map("user_id")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([phoneHash])
+  @@map("otp_sessions")
+}
+
+model PrizePayout {
+  id            String   @id @default(uuid())
+  contestId     String   @unique @map("contest_id")
+  userId        String   @map("user_id")
+  amount        Decimal  @db.Decimal(12, 2)
+  razorpayId    String?  @map("razorpay_id")
+  status        String
+  rawResponse   String?  @map("raw_response")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@map("prize_payouts")
+}
