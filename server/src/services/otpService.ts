@@ -33,12 +33,11 @@ export async function verifyOtp(env: Env, rawPhone: string, code: string): Promi
   const phone = normalizePhone(rawPhone);
   const hash = phoneHash(env, phone);
 
-  const devOk =
-    env.DEV_STATIC_OTP &&
-    code === env.DEV_STATIC_OTP &&
-    (!env.MSG91_AUTH_KEY || process.env.NODE_ENV === "development");
+  /** Demo / staging: when MSG91 is not configured, accept `DEV_STATIC_OTP` in any NODE_ENV. */
+  const staticBypass =
+    Boolean(env.DEV_STATIC_OTP && code === env.DEV_STATIC_OTP) && !env.MSG91_AUTH_KEY;
 
-  if (!devOk) {
+  if (!staticBypass) {
     const session = await prisma.otpSession.findFirst({
       where: { phoneHash: hash, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: "desc" },
