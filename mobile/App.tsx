@@ -1,7 +1,8 @@
-import "react-native-gesture-handler";
+import { Platform } from "react-native";
 import { useEffect } from "react";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createStackNavigator } from "@react-navigation/stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PhoneScreen } from "./src/screens/PhoneScreen";
 import { OtpScreen } from "./src/screens/OtpScreen";
@@ -10,8 +11,19 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { useAuthStore } from "./src/store/authStore";
 import type { AuthStackParamList } from "./src/types/navigation";
 
-const AuthStack = createNativeStackNavigator<AuthStackParamList>();
-const MainStack = createNativeStackNavigator();
+/** Native-only: gesture handler breaks some web builds if imported unconditionally. */
+if (Platform.OS !== "web") {
+  require("react-native-gesture-handler");
+}
+
+const screenOptions = { headerShown: false } as const;
+
+const AuthStack =
+  Platform.OS === "web"
+    ? createStackNavigator<AuthStackParamList>()
+    : createNativeStackNavigator<AuthStackParamList>();
+const MainStack =
+  Platform.OS === "web" ? createStackNavigator() : createNativeStackNavigator();
 
 const navTheme = {
   ...DefaultTheme,
@@ -27,7 +39,7 @@ const navTheme = {
 
 function AuthNavigator() {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+    <AuthStack.Navigator screenOptions={screenOptions}>
       <AuthStack.Screen name="Phone" component={PhoneScreen} />
       <AuthStack.Screen name="Otp" component={OtpScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
@@ -37,7 +49,7 @@ function AuthNavigator() {
 
 function MainNavigator() {
   return (
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
+    <MainStack.Navigator screenOptions={screenOptions}>
       <MainStack.Screen name="Home" component={HomeScreen} />
     </MainStack.Navigator>
   );
